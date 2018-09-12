@@ -102,3 +102,89 @@ sub FetchDatapass_Define($$) {
 #
 # end FetchDatapass_Define
 ###############################################
+
+###############################################
+# begin FetchDatapass_Set
+#
+sub FetchDatapass_Set($$@) {
+}
+#
+# end FetchDatapass_Set
+###############################################
+
+
+###############################################
+# begin FetchDatapass_Get
+#
+sub FetchDatapass_Get($@) {
+}
+#
+# end FetchDatapass_Get
+###############################################
+
+###############################################
+# begin FetchDatapass_Undefine
+#
+sub FetchDatapass_Undefine($$) {
+  my ($hash, $args) = @_;
+
+  RemoveInternalTimer($hash);
+
+  BlockingKill($hash->{helper}{RUNNING_PID}) if(defined($hash->{helper}{RUNNING_PID}));
+
+  return undef;
+} 
+#
+# end FetchDatapass_Undefine
+###############################################
+
+
+###############################################
+# begin FetchDatapass_Notify
+#
+sub FetchDatapass_Notify($$)
+{
+	my ($own_hash, $dev_hash) = @_;
+	my $ownName = $own_hash->{NAME}; # own name / hash
+
+	FetchDatapass_Log $own_hash, 5, "Getting notify $ownName / $dev_hash->{NAME}";
+ 
+	return "" if(IsDisabled($ownName)); # Return without any further action if the module is disabled
+ 
+	my $devName = $dev_hash->{NAME}; # Device that created the events
+	my $events = deviceEvents($dev_hash, 1);
+
+	if($devName eq "global" && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
+	{
+		 FetchDatapass_InitAttr($own_hash);
+	}
+}
+#
+# end FetchDatapass_Notify
+###############################################
+
+###############################################
+# begin FetchDatapass_InitAttr
+#
+sub FetchDatapass_InitAttr($) {
+	my ($hash) = @_;
+	my $name = $hash->{NAME};
+
+	FetchDatapass_Log $hash, 1, "Initialising user setting (attr) for $name";
+	
+	if ($init_done) {
+
+		FetchDatapass_Log $hash, 5, "User setting (attr) initialised for $name";
+	} else {
+		FetchDatapass_Log $hash, 1, "Fhem not ready yet, retry in 5 seconds";
+	  	InternalTimer(gettimeofday() + 5, "FetchDatapass_InitAttr", $hash, 0);
+	}
+}
+#
+# end FetchDatapass_InitAttr
+###############################################
+
+
+# Eval-Rückgabewert für erfolgreiches
+# Laden des Moduls
+1;
