@@ -116,8 +116,12 @@ sub FetchDatapass_GetData($) {
 
 	FetchDatapass_PerformHttpRequest($hash, $hash->{URL}, "DATA");
 
+	my $random_number = rand(60);
+	$random_number = $random_number + 2;
+	my $nextcall = $interval + $random_number;
+	FetchDatapass_Log($hash, 5, "$name: Next intervall: $nextcall");
 	# Now add a next timer for getting the data
-	InternalTimer(gettimeofday() + $interval, "FetchDatapass_GetData", $hash, 0);
+	InternalTimer(gettimeofday() + $nextcall, "FetchDatapass_GetData", $hash, 0);
 }
 #
 # end FetchDatapass_GetData
@@ -192,7 +196,36 @@ sub FetchDatapass_ParseHttpResponse($)
 		# 
 		#FetchDatapass_GetData_Parse($hash, $data, $param->{call});
 		my ($decimal, $fraction, $unita, $total, $totalunit) = $data =~ m/<div class="barTextBelow.*"><span class="colored">(\d*),?(\d*).*([a-zA-Z]{2})<\/span> von (\d*).*([a-zA-Z]{2}) verbraucht<\/div>/;
+		my $received = $decimal.".".$fraction;
 		FetchDatapass_Log($hash, 5, "Ergebnis: ".$decimal.",".$fraction.$unita."/".$total.$totalunit);
+
+		if ($unita ne "GB") {
+			if ($unita eq "MB") {
+				$received = $received / 1024;
+			} elsif ($unita eq "KB") {
+				$received = $received / 1024 / 1024;
+			} else {
+				FetchDatapass_Log($hash, 5, "Unknown unit for used data: ".$unita);
+			}
+		}
+		if ($totalunit ne "GB") {
+			if ($totalunit eq "MB") {
+				$total = $total / 1024;
+			} elsif ($totalunit eq "KB") {
+				$total = $total / 1024 / 1024;
+			} else {
+				FetchDatapass_Log($hash, 5, "Unknown unit for total data: ".$totalunit);
+			}
+		
+		}
+
+		my $rv = 0;
+		readingsBeginUpdate($hash);
+		$rv = readingsBulkUpdate($hash, "DATAUSED", $received);
+		$rv = readingsBulkUpdate($hash, "DATAUSED_UNIT", $unita);
+		$rv = readingsBulkUpdate($hash, "DATATOTAL", $total);
+		$rv = readingsBulkUpdate($hash, "DATATOTAL_UNIT", $totalunit);
+		readingsEndUpdate($hash, 1);
 	} else {
 		FetchDatapass_Log($hash, 1, "Error. Unknown call for ".$param->{call}); 
 	}
@@ -205,7 +238,31 @@ sub FetchDatapass_ParseHttpResponse($)
 # end FetchDatapass_ParseHttpResponse
 ###############################################
 
+###############################################
+# begin FetchDatapass_DbLog_splitFn
+#
+sub FetchDatapass_DbLog_splitFn($) {
+  my ($event) = @_;
+  my ($reading, $value, $unit) = "";
 
+  my @parts = split(/ /,$event,3);
+  $reading = $parts[0];
+  $reading =~ tr/://d;
+  $value = $parts[1];
+  
+  $unit = "";
+
+  $unit = "GB" if($reading =~ /DATATOTAL.*/);;
+  $unit = "GB" if($reading =~ /DATAUSED.*/);;
+  
+  Log3 "dbsplit", 5, "FetchDatapass dbsplit: ".$event."  $reading: $value $unit" if(defined($value));
+  Log3 "dbsplit", 5, "FetchDatapass dbsplit: ".$event."  $reading" if(!defined($value));
+
+  return ($reading, $value, $unit);
+}
+#
+# end FetchDatapass_DbLog_splitFn
+###############################################
 
 ###############################################
 # begin FetchDatapass_Set
