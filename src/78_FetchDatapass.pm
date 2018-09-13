@@ -221,10 +221,10 @@ sub FetchDatapass_ParseHttpResponse($)
 
 		my $rv = 0;
 		readingsBeginUpdate($hash);
-		$rv = readingsBulkUpdate($hash, "DATAUSED", $received);
-		$rv = readingsBulkUpdate($hash, "DATAUSED_UNIT", $unita);
-		$rv = readingsBulkUpdate($hash, "DATATOTAL", $total);
-		$rv = readingsBulkUpdate($hash, "DATATOTAL_UNIT", $totalunit);
+		$rv = readingsBulkUpdate($hash, "DATA_USED", $received);
+		$rv = readingsBulkUpdate($hash, "DATA_UNIT_USED", $unita);
+		$rv = readingsBulkUpdate($hash, "DATA_TOTAL", $total);
+		$rv = readingsBulkUpdate($hash, "DATA_UNIT_TOTAL", $totalunit);
 		readingsEndUpdate($hash, 1);
 	} else {
 		FetchDatapass_Log($hash, 1, "Error. Unknown call for ".$param->{call}); 
