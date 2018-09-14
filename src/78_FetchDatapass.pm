@@ -11,7 +11,6 @@ use warnings;
 use Time::Local;
 use POSIX qw( strftime );
 use HttpUtils;
-use JSON qw( decode_json );
 
 my $MODUL = "FetchDatapass";
 
@@ -218,6 +217,29 @@ sub FetchDatapass_ParseHttpResponse($)
 			}
 		
 		}
+		
+		my $datarest = $total - $received;
+		
+		my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+		$mon += 1;
+		$year += 1900;
+		FetchDatapass_Log($hash, 5, "Debug. Current day: ".$mday.", month: ".$mon.", year: ".$year); 
+		my $days_month = $mon-2?30+($mon*3%7<4):28+!($year%4||$year%400*!($year%100));
+		my $rest_days = $days_month - $mday;
+
+		FetchDatapass_Log($hash, 5, "Debug. Days this month ".$days_month.", current day: ".$mday.", month: ".$mon.", year: ".$year); 
+
+		my $avg_used = sprintf("%.4f", $received / $mday);
+		my $avg_avail_rest = sprintf("%.4f", $datarest / $rest_days);
+		my $avg_per_day = sprintf("%.4f", $total / $days_month);
+		my $estimate = sprintf("%.4f", $days_month * $avg_used);
+
+		my $data_end_days = sprintf("%u", ($total - $received) / $avg_used);
+		$data_end_days = $data_end_days + $rest_days;
+		if ($data_end_days > $days_month) {
+			$data_end_days = $days_month;
+		}
+		my $end_date = sprintf("%.2d", $data_end_days).".".sprintf("%.2d", $mon).".".sprintf("%.4d", $year);
 
 		my $rv = 0;
 		readingsBeginUpdate($hash);
@@ -225,6 +247,11 @@ sub FetchDatapass_ParseHttpResponse($)
 		$rv = readingsBulkUpdate($hash, "DATA_UNIT_USED", $unita);
 		$rv = readingsBulkUpdate($hash, "DATA_TOTAL", $total);
 		$rv = readingsBulkUpdate($hash, "DATA_UNIT_TOTAL", $totalunit);
+		$rv = readingsBulkUpdate($hash, "DATA_AVGU_DAY", $avg_used);
+		$rv = readingsBulkUpdate($hash, "DATA_AVGA_DAY", $avg_per_day);
+		$rv = readingsBulkUpdate($hash, "DATA_AVGR_DAY", $avg_avail_rest);
+		$rv = readingsBulkUpdate($hash, "DATA_ESTIMATION", $estimate);
+		$rv = readingsBulkUpdate($hash, "DATA_END_REACHED", $end_date);
 		readingsEndUpdate($hash, 1);
 	} else {
 		FetchDatapass_Log($hash, 1, "Error. Unknown call for ".$param->{call}); 
