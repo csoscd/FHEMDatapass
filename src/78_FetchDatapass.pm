@@ -27,10 +27,12 @@ sub FetchDatapass_Log($$$)
    
    my $xsubroutine = ( caller(1) )[3];
    my $sub         = ( split( ':', $xsubroutine ) )[2];
-   $sub =~ s/FetchDatapass_//;
+   if (defined $sub) {
+	   $sub =~ s/FetchDatapass_//;
 
-   my $instName = ( ref($hash) eq "HASH" ) ? $hash->{NAME} : $hash;
-   Log3 $hash, $loglevel, "$MODUL $instName: $sub.$xline " . $text;
+	   my $instName = ( ref($hash) eq "HASH" ) ? $hash->{NAME} : $hash;
+	   Log3 $hash, $loglevel, "$MODUL $instName: $sub.$xline " . $text;
+   }
 }
 #
 # end FetchDatapass_Log
@@ -83,6 +85,9 @@ sub FetchDatapass_Define($$) {
 
     $hash->{NAME} = $name;
     $hash->{URL} = "http://datapass.de/";
+    #
+    # Only for error testing
+    # $hash->{URL} = "http://google.de/";
     $hash->{STATE}    = "Initializing" if $interval > 0;
     $hash->{helper}{INTERVAL} = $interval;
     $hash->{MODEL}    = $type;
@@ -189,73 +194,90 @@ sub FetchDatapass_ParseHttpResponse($)
     {
         FetchDatapass_Log($hash, 5, "url ".$param->{url}." returned: $data");                                                         # Eintrag fürs Log
 
+	eval {
+
 	if ($param->{call} eq "DATA") {
 		#
 		# This is the standard data call
 		# 
 		#FetchDatapass_GetData_Parse($hash, $data, $param->{call});
 		my ($decimal, $fraction, $unita, $total, $totalunit) = $data =~ m/<div class="barTextBelow.*"><span class="colored">(\d*),?(\d*).*([a-zA-Z]{2})<\/span> von (\d*).*([a-zA-Z]{2}) verbraucht<\/div>/;
-		my $received = $decimal.".".$fraction;
-		FetchDatapass_Log($hash, 5, "Ergebnis: ".$decimal.",".$fraction.$unita."/".$total.$totalunit);
+		
+		if ((defined $decimal) && (defined $fraction) && (defined $unita) && (defined $total) && (defined $totalunit)) {
+			my $received = $decimal.".".$fraction;
+			FetchDatapass_Log($hash, 5, "Ergebnis: ".$decimal.",".$fraction.$unita."/".$total.$totalunit);
 
-		if ($unita ne "GB") {
-			if ($unita eq "MB") {
-				$received = $received / 1024;
-			} elsif ($unita eq "KB") {
-				$received = $received / 1024 / 1024;
-			} else {
-				FetchDatapass_Log($hash, 5, "Unknown unit for used data: ".$unita);
+			if ($unita ne "GB") {
+				if ($unita eq "MB") {
+					$received = $received / 1024;
+				} elsif ($unita eq "KB") {
+					$received = $received / 1024 / 1024;
+				} else {
+					FetchDatapass_Log($hash, 5, "Unknown unit for used data: ".$unita);
+				}
 			}
-		}
-		if ($totalunit ne "GB") {
-			if ($totalunit eq "MB") {
-				$total = $total / 1024;
-			} elsif ($totalunit eq "KB") {
-				$total = $total / 1024 / 1024;
-			} else {
-				FetchDatapass_Log($hash, 5, "Unknown unit for total data: ".$totalunit);
+			if ($totalunit ne "GB") {
+				if ($totalunit eq "MB") {
+					$total = $total / 1024;
+				} elsif ($totalunit eq "KB") {
+					$total = $total / 1024 / 1024;
+				} else {
+					FetchDatapass_Log($hash, 5, "Unknown unit for total data: ".$totalunit);
+				}
+
 			}
-		
+
+			my $datarest = $total - $received;
+
+			my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+			$mon += 1;
+			$year += 1900;
+			FetchDatapass_Log($hash, 5, "Debug. Current day: ".$mday.", month: ".$mon.", year: ".$year); 
+			my $days_month = $mon-2?30+($mon*3%7<4):28+!($year%4||$year%400*!($year%100));
+			my $rest_days = $days_month - $mday;
+
+			FetchDatapass_Log($hash, 5, "Debug. Days this month ".$days_month.", current day: ".$mday.", month: ".$mon.", year: ".$year); 
+
+			my $avg_used = sprintf("%.4f", $received / $mday);
+			my $avg_avail_rest = sprintf("%.4f", $datarest / $rest_days);
+			my $avg_per_day = sprintf("%.4f", $total / $days_month);
+			my $estimate = sprintf("%.4f", $days_month * $avg_used);
+
+			my $data_end_days = 0;
+			if ($avg_used != 0) {
+				$data_end_days = sprintf("%u", ($total - $received) / $avg_used);
+			}
+			$data_end_days = $data_end_days + $rest_days;
+			if ($data_end_days > $days_month) {
+				$data_end_days = $days_month;
+			}
+			my $end_date = sprintf("%.2d", $data_end_days).".".sprintf("%.2d", $mon).".".sprintf("%.4d", $year);
+
+			my $rv = 0;
+			readingsBeginUpdate($hash);
+			$rv = readingsBulkUpdate($hash, "DATA_USED", $received);
+			$rv = readingsBulkUpdate($hash, "DATA_UNIT_USED", $unita);
+			$rv = readingsBulkUpdate($hash, "DATA_TOTAL", $total);
+			$rv = readingsBulkUpdate($hash, "DATA_UNIT_TOTAL", $totalunit);
+			$rv = readingsBulkUpdate($hash, "DATA_AVGU_DAY", $avg_used);
+			$rv = readingsBulkUpdate($hash, "DATA_AVGA_DAY", $avg_per_day);
+			$rv = readingsBulkUpdate($hash, "DATA_AVGR_DAY", $avg_avail_rest);
+			$rv = readingsBulkUpdate($hash, "DATA_ESTIMATION", $estimate);
+			$rv = readingsBulkUpdate($hash, "DATA_END_REACHED", $end_date);
+			readingsEndUpdate($hash, 1);
+		} else {
+			FetchDatapass_Log($hash, 1, "Error. No update because of previous errors."); 
 		}
-		
-		my $datarest = $total - $received;
-		
-		my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-		$mon += 1;
-		$year += 1900;
-		FetchDatapass_Log($hash, 5, "Debug. Current day: ".$mday.", month: ".$mon.", year: ".$year); 
-		my $days_month = $mon-2?30+($mon*3%7<4):28+!($year%4||$year%400*!($year%100));
-		my $rest_days = $days_month - $mday;
-
-		FetchDatapass_Log($hash, 5, "Debug. Days this month ".$days_month.", current day: ".$mday.", month: ".$mon.", year: ".$year); 
-
-		my $avg_used = sprintf("%.4f", $received / $mday);
-		my $avg_avail_rest = sprintf("%.4f", $datarest / $rest_days);
-		my $avg_per_day = sprintf("%.4f", $total / $days_month);
-		my $estimate = sprintf("%.4f", $days_month * $avg_used);
-
-		my $data_end_days = sprintf("%u", ($total - $received) / $avg_used);
-		$data_end_days = $data_end_days + $rest_days;
-		if ($data_end_days > $days_month) {
-			$data_end_days = $days_month;
-		}
-		my $end_date = sprintf("%.2d", $data_end_days).".".sprintf("%.2d", $mon).".".sprintf("%.4d", $year);
-
-		my $rv = 0;
-		readingsBeginUpdate($hash);
-		$rv = readingsBulkUpdate($hash, "DATA_USED", $received);
-		$rv = readingsBulkUpdate($hash, "DATA_UNIT_USED", $unita);
-		$rv = readingsBulkUpdate($hash, "DATA_TOTAL", $total);
-		$rv = readingsBulkUpdate($hash, "DATA_UNIT_TOTAL", $totalunit);
-		$rv = readingsBulkUpdate($hash, "DATA_AVGU_DAY", $avg_used);
-		$rv = readingsBulkUpdate($hash, "DATA_AVGA_DAY", $avg_per_day);
-		$rv = readingsBulkUpdate($hash, "DATA_AVGR_DAY", $avg_avail_rest);
-		$rv = readingsBulkUpdate($hash, "DATA_ESTIMATION", $estimate);
-		$rv = readingsBulkUpdate($hash, "DATA_END_REACHED", $end_date);
-		readingsEndUpdate($hash, 1);
 	} else {
 		FetchDatapass_Log($hash, 1, "Error. Unknown call for ".$param->{call}); 
 	}
+	
+	# end eval
+	} or do {
+		my $error = $@ || 'Unknown failure';
+		FetchDatapass_Log($hash, 1, "Error. ".$error); 	
+	};
+	
     }
     
     # Damit ist die Abfrage zuende.
