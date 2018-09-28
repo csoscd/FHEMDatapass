@@ -97,7 +97,7 @@ sub FetchDatapass_Define($$) {
   
   InternalTimer(gettimeofday() + 10, "FetchDatapass_GetData", $hash, 0);
 
-  $hash->{fhem}{modulVersion} = '$V0.0.1$';
+  $hash->{fhem}{modulVersion} = '$V0.0.2$';
  
   return undef;
 }
@@ -176,21 +176,21 @@ sub FetchDatapass_ParseHttpResponse($)
     if($err ne "")                                                                                                      # wenn ein Fehler bei der HTTP Abfrage aufgetreten ist
     {
 	$hash->{STATE}    = "Connection error";
-        FetchDatapass_Log($hash, 1, "error while requesting ".$param->{url}." - $err");                                            # Eintrag fürs Log
+        FetchDatapass_Log($hash, 1, "$name: Error while requesting ".$param->{url}." - $err");                                            # Eintrag fürs Log
 	if ($param->{call} eq "DATA") {
 	  #
 	  # if DATA Call failed, try again in 60 seconds
 	  #
 	  # InternalTimer(gettimeofday() + 60, "FetchDatapass_GetData", $hash, 0);
 	  $hash->{STATE}    = "Connection error getting data";
-	  FetchDatapass_Log($hash, 1, "DATA call to www.datapass.de failed");                                                         # Eintrag fürs Log
+	  FetchDatapass_Log($hash, 1, "$name: DATA call to www.datapass.de failed");                                                         # Eintrag fürs Log
 	} else {
-	  FetchDatapass_Log($hash, 1, "Call to www.datapass.de failed for ".$param->{call}. "(".$param->{url}.")");                                                         # Eintrag fürs Log
+	  FetchDatapass_Log($hash, 1, "$name: Call to www.datapass.de failed for ".$param->{call}. "(".$param->{url}.")");                                                         # Eintrag fürs Log
 	}
     }
     elsif($data ne "")                                                                                                  # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
     {
-        FetchDatapass_Log($hash, 5, "url ".$param->{url}." returned: $data");                                                         # Eintrag fürs Log
+        FetchDatapass_Log($hash, 5, "$name: url ".$param->{url}." returned: $data");                                                         # Eintrag fürs Log
 
 	eval {
 
@@ -203,7 +203,7 @@ sub FetchDatapass_ParseHttpResponse($)
 		
 		if ((defined $decimal) && (defined $fraction) && (defined $unita) && (defined $total) && (defined $totalunit)) {
 			my $received = $decimal.".".$fraction;
-			FetchDatapass_Log($hash, 5, "Ergebnis: ".$decimal.",".$fraction.$unita."/".$total.$totalunit);
+			FetchDatapass_Log($hash, 5, "$name: Result: ".$decimal.",".$fraction.$unita."/".$total.$totalunit);
 
 			if ($unita ne "GB") {
 				if ($unita eq "MB") {
@@ -211,7 +211,7 @@ sub FetchDatapass_ParseHttpResponse($)
 				} elsif ($unita eq "KB") {
 					$received = $received / 1024 / 1024;
 				} else {
-					FetchDatapass_Log($hash, 5, "Unknown unit for used data: ".$unita);
+					FetchDatapass_Log($hash, 5, "$name: Unknown unit for used data: ".$unita);
 				}
 			}
 			if ($totalunit ne "GB") {
@@ -220,7 +220,7 @@ sub FetchDatapass_ParseHttpResponse($)
 				} elsif ($totalunit eq "KB") {
 					$total = $total / 1024 / 1024;
 				} else {
-					FetchDatapass_Log($hash, 5, "Unknown unit for total data: ".$totalunit);
+					FetchDatapass_Log($hash, 5, "$name: Unknown unit for total data: ".$totalunit);
 				}
 
 			}
@@ -230,11 +230,11 @@ sub FetchDatapass_ParseHttpResponse($)
 			my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 			$mon += 1;
 			$year += 1900;
-			FetchDatapass_Log($hash, 5, "Debug. Current day: ".$mday.", month: ".$mon.", year: ".$year); 
+			FetchDatapass_Log($hash, 5, "$name: Debug. Current day: ".$mday.", month: ".$mon.", year: ".$year); 
 			my $days_month = $mon-2?30+($mon*3%7<4):28+!($year%4||$year%400*!($year%100));
 			my $rest_days = $days_month - $mday;
 
-			FetchDatapass_Log($hash, 5, "Debug. Days this month ".$days_month.", current day: ".$mday.", month: ".$mon.", year: ".$year); 
+			FetchDatapass_Log($hash, 5, "$name: Debug. Days this month ".$days_month.", current day: ".$mday.", month: ".$mon.", year: ".$year); 
 
 			my $avg_used = sprintf("%.4f", $received / $mday);
 			my $avg_avail_rest = sprintf("%.4f", $datarest / $rest_days);
@@ -264,16 +264,17 @@ sub FetchDatapass_ParseHttpResponse($)
 			$rv = readingsBulkUpdate($hash, "DATA_END_REACHED", $end_date);
 			readingsEndUpdate($hash, 1);
 		} else {
-			FetchDatapass_Log($hash, 1, "Error. No update because of previous errors."); 
+			FetchDatapass_Log($hash, 1, "$name: Error. No update because of previous errors."); 
 		}
 	} else {
-		FetchDatapass_Log($hash, 1, "Error. Unknown call for ".$param->{call}); 
+		FetchDatapass_Log($hash, 1, "$name: Error. Unknown call for ".$param->{call}); 
 	}
 	
 	# end eval
-	} or do {
+	};
+	if ($@) {
 		my $error = $@ || 'Unknown failure';
-		FetchDatapass_Log($hash, 1, "Error. ".$error); 	
+		FetchDatapass_Log($hash, 1, "$name: Error. ".$error); 	
 	};
 	
     }
@@ -378,13 +379,13 @@ sub FetchDatapass_InitAttr($) {
 	my ($hash) = @_;
 	my $name = $hash->{NAME};
 
-	FetchDatapass_Log $hash, 1, "Initialising user setting (attr) for $name";
+	FetchDatapass_Log $hash, 1, "$name: Initialising user setting (attr) for $name";
 	
 	if ($init_done) {
 
-		FetchDatapass_Log $hash, 5, "User setting (attr) initialised for $name";
+		FetchDatapass_Log $hash, 5, "$name: User setting (attr) initialised for $name";
 	} else {
-		FetchDatapass_Log $hash, 1, "Fhem not ready yet, retry in 5 seconds";
+		FetchDatapass_Log $hash, 1, "$name: Fhem not ready yet, retry in 5 seconds";
 	  	InternalTimer(gettimeofday() + 5, "FetchDatapass_InitAttr", $hash, 0);
 	}
 }
