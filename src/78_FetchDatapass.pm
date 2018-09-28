@@ -27,12 +27,10 @@ sub FetchDatapass_Log($$$)
    
    my $xsubroutine = ( caller(1) )[3];
    my $sub         = ( split( ':', $xsubroutine ) )[2];
-   if (defined $sub) {
-	   $sub =~ s/FetchDatapass_//;
+   $sub =~ s/FetchDatapass_//;
 
-	   my $instName = ( ref($hash) eq "HASH" ) ? $hash->{NAME} : $hash;
-	   Log3 $hash, $loglevel, "$MODUL $instName: $sub.$xline " . $text;
-   }
+   my $instName = ( ref($hash) eq "HASH" ) ? $hash->{NAME} : $hash;
+   Log3 $hash, $loglevel, "$MODUL $instName: $sub.$xline " . $text;
 }
 #
 # end FetchDatapass_Log
