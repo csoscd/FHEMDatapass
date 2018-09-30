@@ -258,6 +258,15 @@ sub FetchDatapass_ParseHttpResponse($)
 			}
 			my $end_date = sprintf("%.2d", $data_end_days).".".sprintf("%.2d", $mon).".".sprintf("%.4d", $year);
 
+			my $data_alert_avg = 0;
+			my $data_alert_rest = 0;
+			if ($avg_avail_rest < $avg_used) {
+				$data_alert_rest = 1;
+			}
+			if ($avg_avail_rest < $avg_used) {
+				$data_alert_avg = 1;
+			}
+
 			my $rv = 0;
 			readingsBeginUpdate($hash);
 			$rv = readingsBulkUpdate($hash, "DATA_USED", $received);
@@ -269,6 +278,9 @@ sub FetchDatapass_ParseHttpResponse($)
 			$rv = readingsBulkUpdate($hash, "DATA_AVGR_DAY", $avg_avail_rest);
 			$rv = readingsBulkUpdate($hash, "DATA_ESTIMATION", $estimate);
 			$rv = readingsBulkUpdate($hash, "DATA_END_REACHED", $end_date);
+			$rv = readingsBulkUpdate($hash, "DATA_ALERT_REST", $data_alert_rest);
+			$rv = readingsBulkUpdate($hash, "DATA_ALERT_AVG", $data_alert_avg);
+			
 			readingsEndUpdate($hash, 1);
 		} else {
 			FetchDatapass_Log($hash, 1, "$name: Error. No update because of previous errors."); 
