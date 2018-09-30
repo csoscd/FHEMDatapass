@@ -237,7 +237,14 @@ sub FetchDatapass_ParseHttpResponse($)
 			FetchDatapass_Log($hash, 5, "$name: Debug. Days this month ".$days_month.", current day: ".$mday.", month: ".$mon.", year: ".$year); 
 
 			my $avg_used = sprintf("%.4f", $received / $mday);
-			my $avg_avail_rest = sprintf("%.4f", $datarest / $rest_days);
+
+			my $avg_avail_rest = 0;
+			if ($rest_days < 1) {
+				$avg_avail_rest = sprintf("%.4f", $datarest);
+			} else {
+				$avg_avail_rest = sprintf("%.4f", $datarest / $rest_days);
+			}
+
 			my $avg_per_day = sprintf("%.4f", $total / $days_month);
 			my $estimate = sprintf("%.4f", $days_month * $avg_used);
 
@@ -245,8 +252,8 @@ sub FetchDatapass_ParseHttpResponse($)
 			if ($avg_used != 0) {
 				$data_end_days = sprintf("%u", ($total - $received) / $avg_used);
 			}
-			$data_end_days = $data_end_days + $rest_days;
-			if ($data_end_days > $days_month) {
+			# $data_end_days = $data_end_days + $rest_days;
+			if (($mday + $data_end_days) > $days_month) {
 				$data_end_days = $days_month;
 			}
 			my $end_date = sprintf("%.2d", $data_end_days).".".sprintf("%.2d", $mon).".".sprintf("%.4d", $year);
